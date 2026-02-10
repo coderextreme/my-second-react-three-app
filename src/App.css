@@ -1,0 +1,97 @@
+/* --- App.css --- */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #111;
+  color: white;
+  font-family: sans-serif;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.header {
+  padding: 1rem;
+  background: linear-gradient(to right, #1e1b4b, #3b0764);
+  border-bottom: 1px solid #581c87;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 350px;
+  background-color: #1f2937;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  border-right: 1px solid #374151;
+  box-sizing: border-box;
+}
+
+.json-input {
+  flex: 1;
+  background-color: #111827;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  padding: 0.5rem;
+  font-family: monospace;
+  font-size: 12px;
+  resize: none;
+  margin-bottom: 1rem;
+}
+
+.btn {
+  background-color: #7e22ce;
+  color: white;
+  border: none;
+  padding: 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn:hover {
+  background-color: #9333ea;
+}
+
+/* CRITICAL: This ensures the canvas has space to render */
+.canvas-container {
+  flex: 1;
+  position: relative;
+  background-color: black;
+  overflow: hidden;
+}
+
+.canvas-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.status {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  color: #4ade80;
+  font-family: monospace;
+  pointer-events: none;
+}

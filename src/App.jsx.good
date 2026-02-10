@@ -1,0 +1,164 @@
+import React, { useEffect, useRef, useState } from 'react';
+import './App.css'; // Ensure CSS is imported
+
+import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import WebGPU from 'three/addons/capabilities/WebGPU.js';
+
+export default function App() {
+  const containerRef = useRef(null);
+  const [error, setError] = useState(null);
+  const [jsonInput, setJsonInput] = useState('');
+
+  const defaultScene = {
+    "X3D": {
+      "Scene": {
+        "children": [
+          { "Background": { "skyColor": [[0.0, 0.2, 0.7], [0.0, 0.5, 1.0], [1.0, 1.0, 1.0]], "skyAngle": [1.309, 1.571] } },
+          { "DirectionalLight": { "direction": [-0.5, -1, -0.5], "intensity": 2 } },
+          { "Transform": {
+              "translation": [0, 0, 0],
+              "children": [
+                { "Shape": {
+                    "geometry": { "Box": { "size": [2, 2, 2] } },
+                    "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [1, 0.5, 0] } } } }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  };
+
+  useEffect(() => {
+    setJsonInput(JSON.stringify(defaultScene, null, 2));
+  }, []);
+
+  useEffect(() => {
+    if (!jsonInput) return;
+    if (WebGPU && !WebGPU.isAvailable()) {
+      setError('WebGPU not supported in this browser.');
+      return;
+    }
+
+    let renderer, scene, camera, controls;
+    let resizeObserver;
+
+    const init = async () => {
+      try {
+        const container = containerRef.current;
+        if (!container) return;
+
+        // 1. Scene Setup
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+
+        // 2. Camera Setup
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
+        camera.position.set(5, 5, 10);
+
+        // 3. Renderer Setup
+        renderer = new WebGPURenderer({ antialias: true });
+        await renderer.init();
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        container.innerHTML = '';
+        container.appendChild(renderer.domElement);
+
+        // 4. Controls
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 5. Parse JSON (Simplified for demo)
+        const data = JSON.parse(jsonInput);
+        if(data.X3D?.Scene?.children) {
+            data.X3D.Scene.children.forEach(child => {
+                if(child.Background) {
+                    scene.background = new THREE.Color(...child.Background.skyColor[0]);
+                }
+                if(child.DirectionalLight) {
+                    const dl = new THREE.DirectionalLight(0xffffff, child.DirectionalLight.intensity);
+                    dl.position.set(...(child.DirectionalLight.direction || [0,1,0])).negate().multiplyScalar(10);
+                    scene.add(dl);
+                }
+                if(child.Transform) {
+                    const grp = new THREE.Group();
+                    grp.position.set(...(child.Transform.translation || [0,0,0]));
+                    // Add Box
+                    const geo = new THREE.BoxGeometry(2,2,2);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    grp.add(mesh);
+                    scene.add(grp);
+                }
+            });
+        }
+
+        // 6. Animation Loop
+        renderer.setAnimationLoop(() => {
+          controls.update();
+          renderer.render(scene, camera);
+        });
+
+        // 7. Resize Handler
+        resizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            if (width && height) {
+              camera.aspect = width / height;
+              camera.updateProjectionMatrix();
+              renderer.setSize(width, height);
+            }
+          }
+        });
+        resizeObserver.observe(container);
+
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+      }
+    };
+
+    init();
+
+    return () => {
+      if (resizeObserver) resizeObserver.disconnect();
+      if (renderer) {
+        renderer.dispose();
+        renderer.setAnimationLoop(null);
+      }
+    };
+  }, [jsonInput]);
+
+  return (
+    <div className="app-container">
+      <div className="header">
+        <h1>X3D WebGPU Renderer</h1>
+      </div>
+
+      {error && <div style={{background: 'red', padding: '10px'}}>{error}</div>}
+
+      <div className="main-content">
+        <div className="sidebar">
+          <textarea
+            className="json-input"
+            value={jsonInput}
+            onChange={(e) => setJsonInput(e.target.value)}
+          />
+          <button className="btn" onClick={() => window.location.reload()}>Reload Scene</button>
+        </div>
+
+        <div className="canvas-container">
+          <div ref={containerRef} className="canvas-wrapper" />
+          <div className="status">WebGPU Active</div>
+        </div>
+      </div>
+    </div>
+  );
+}
