@@ -5,6 +5,10 @@ import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+
+const loader = new FontLoader();
 
 export default function App() {
   const containerRef = useRef(null);
@@ -108,7 +112,7 @@ export default function App() {
                   "translation": [0, 6, 0],
                   "children": [{
                     "Shape": {
-                      "geometry": { "Text": { "string": ["X3D WebGPU"], "fontStyle": { "FontStyle": { "size": 0.8 } } } },
+                      "geometry": { "Text": { "string": ["X3D", "WebGPU"], "fontStyle": { "FontStyle": { "size": 0.8 } } } },
                       "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [1, 1, 0], "emissiveColor": [0.5, 0.5, 0] } } } }
                     }
                   }]
@@ -337,17 +341,32 @@ export default function App() {
       return group;
     };
 
-    const createShape = async (data) => {
-      let geo = await createGeometry(data.geometry);
-      let mat = createMaterial(data.appearance);
-
-      if (geo && mat) {
-        if (geo.isLineGeometry) return new THREE.LineSegments(geo, mat);
-        if (geo.isPointGeometry) return new THREE.Points(geo, mat);
-        return new THREE.Mesh(geo, mat);
+const createShape = async (data) => {
+  let geo = await createGeometry(data.geometry);
+  let mat = createMaterial(data.appearance);
+  
+  // Handle Groups (for multi-line text)
+  if (geo && geo.isGroup) {
+    geo.traverse((child) => {
+      if (child.isMesh) {
+        // Use simpler material for flat text
+        const textMat = new THREE.MeshBasicMaterial({ 
+          color: mat.color,
+          side: THREE.FrontSide 
+        });
+        child.material = textMat;
       }
-      return null;
-    };
+    });
+    return geo;
+  }
+  
+  if (geo && mat) {
+    if (geo.isLineGeometry) return new THREE.LineSegments(geo, mat);
+    if (geo.isPointGeometry) return new THREE.Points(geo, mat);
+    return new THREE.Mesh(geo, mat);
+  }
+  return null;
+};
 
     const createGeometry = async (data) => {
       if (!data) return null;
@@ -458,13 +477,61 @@ export default function App() {
       return geo;
     };
 
-    const createTextGeometry = (textData) => {
-      // Placeholder for TextGeometry to avoid font loading complexity
-      // Returns a box representing the text bounds
-      const strings = textData.string || ["Text"];
-      const size = textData.fontStyle?.FontStyle?.size || 1;
-      return new THREE.BoxGeometry(strings[0].length * size * 0.5, size, 0.1);
-    };
+const createTextGeometry = async (textData) => {
+  function loadFont(url) {
+    return new Promise((resolve, reject) => {
+      const loader = new FontLoader();
+      loader.load(url, resolve, undefined, reject);
+    });
+  }
+
+  const font = await loadFont('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json');
+	/* helvetiker_regular.typeface.json
+helvetiker_bold.typeface.json
+optimer_regular.typeface.json
+optimer_bold.typeface.json
+gentilis_regular.typeface.json
+gentilis_bold.typeface.json
+droid_sans_regular.typeface.json
+droid_sans_bold.typeface.json
+droid_serif_regular.typeface.json
+droid_serif_bold.typeface.json */
+  const strings = textData.string || ["Text"];
+  const size = textData.fontStyle?.FontStyle?.size || 1;
+
+  // Single line
+  if (strings.length === 1) {
+    const geometry = new TextGeometry(strings[0], {
+      font: font,
+      size: size,
+      depth: 0,
+      curveSegments: 12,
+    });
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  // Multi-line: return a Group
+  const group = new THREE.Group();
+  const lineHeight = size * 1.2;
+
+  strings.forEach((str, index) => {
+    const geometry = new TextGeometry(str, {
+      font: font,
+      size: size,
+      depth: 0,
+      curveSegments: 12,
+    });
+
+    geometry.computeVertexNormals();  // Compute normals for each geometry
+
+    const mesh = new THREE.Mesh(geometry);
+    mesh.position.y = -index * lineHeight;
+    group.add(mesh);
+  });
+
+  return group;
+};
 
     const createExtrusion = (ext) => {
       const crossSection = ext.crossSection || [[1, 1], [1, -1], [-1, -1], [-1, 1], [1, 1]];
@@ -597,12 +664,37 @@ export default function App() {
       <div className="main-content">
         <div className="sidebar">
           <textarea
+	    id="jsonContent"
             className="json-input"
             value={jsonInput}
             onChange={(e) => setJsonInput(e.target.value)}
             spellCheck={false}
           />
           <button className="btn" onClick={() => {
+		  /*
+	  <div id="myModal" style="display:none; position:fixed; top:20%; left:30%; background:white; border:1px solid #ccc; padding:20px;">
+  		<button onclick="document.getElementById('myModal').style.display='none'">Close</button>
+	  </div>
+	        function displayInModal(data) {
+		  const modal = document.getElementById('myModal');
+		  const content = document.getElementById('jsonContent');
+		  content.textContent = JSON.stringify(data, null, 2); // Preserves formatting
+		  modal.style.display = 'block';
+		}
+	        async function showJsonPopup(url) {
+		  try {
+		    const response = await fetch(url);
+		    if (!response.ok) throw new Error('Network response was not ok');
+		    const data = await response.json();
+
+		    // Pass the data to your chosen popup method
+		    displayInModal(data);
+		  } catch (error) {
+		    console.error('Error fetching JSON:', error);
+		  }
+		}
+		showJsonPopup(prompt("Please enter a URL:"));
+		  */
              const temp = jsonInput; setJsonInput(''); setTimeout(() => setJsonInput(temp), 10);
           }}>
             Reload Scene
