@@ -8,132 +8,334 @@ import WebGPU from 'three/addons/capabilities/WebGPU.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 
-const loader = new FontLoader();
+// Hyperjump JSON Schema validation (install: npm i @hyperjump/json-schema)
+import { registerSchema, validate } from "@hyperjump/json-schema/draft-2020-12";
+import { BASIC } from "@hyperjump/json-schema/experimental";
+import selectObjectFromJson from './selectObjectFromJson.js';
+
+// ─── X3D JSON Schema URI ────────────────────────────────────────────────────
+const X3D_SCHEMA_URI = 'http://localhost:5173/x3d-4.1-JSONSchema.json';
 
 export default function App() {
   const containerRef = useRef(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [jsonInput, setJsonInput] = useState('');
+  const [validation, setValidation] = useState(null); // { valid, errors }
 
-  // --- RESTORED COMPREHENSIVE SCENE ---
+  // ── X3D JSON scene (@ = simple field, - = SFNode / MFNode field) ──────────
   const defaultScene = {
     "X3D": {
-      "version": "3.3",
-      "profile": "Immersive",
+      "@version": "3.3",
+      "@profile": "Immersive",
       "Scene": {
-        "children": [
+        "-children": [
+          // ── Background ────────────────────────────────────────────────────
           {
             "Background": {
-              "DEF": "MainBackground",
-              "skyColor": [[0.0, 0.2, 0.7], [0.0, 0.5, 1.0], [1.0, 1.0, 1.0]],
-              "skyAngle": [1.309, 1.571],
-              "groundColor": [[0.1, 0.1, 0.0], [0.4, 0.25, 0.2], [0.6, 0.6, 0.6]],
-              "groundAngle": [1.309, 1.571]
+              "@DEF": "MainBackground",
+              "@skyColor": [0.0, 0.2, 0.7, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0],
+              "@skyAngle": [1.309, 1.5708],
+              "@groundColor": [0.1, 0.1, 0.0, 0.4, 0.25, 0.2, 0.6, 0.6, 0.6],
+              "@groundAngle": [1.309, 1.5708]
             }
           },
-          { "DirectionalLight": { "DEF": "SunLight", "direction": [0, -1, -1], "color": [1, 1, 0.9], "intensity": 0.8 } },
-          { "PointLight": { "DEF": "RedLight", "location": [5, 3, 5], "color": [1, 0.2, 0.2], "intensity": 0.6 } },
-          { "SpotLight": { "DEF": "SpotLight1", "location": [-5, 5, 5], "direction": [1, -1, -1], "color": [0.2, 0.2, 1], "intensity": 0.7, "angle": 0.78 } },
 
-          // Animated Box
+          // ── Lights ────────────────────────────────────────────────────────
+          {
+            "DirectionalLight": {
+              "@DEF": "SunLight",
+              "@direction": [0, -1, -1],
+              "@color": [1, 1, 0.9],
+              "@intensity": 0.8
+            }
+          },
+          {
+            "PointLight": {
+              "@DEF": "RedLight",
+              "@location": [5, 3, 5],
+              "@color": [1, 0.2, 0.2],
+              "@intensity": 0.6
+            }
+          },
+          {
+            "SpotLight": {
+              "@DEF": "SpotLight1",
+              "@location": [-5, 5, 5],
+              "@direction": [1, -1, -1],
+              "@color": [0.2, 0.2, 1],
+              "@intensity": 0.7,
+              "@angle": 0.78
+            }
+          },
+
+          // ── Animated Box ──────────────────────────────────────────────────
           {
             "Transform": {
-              "DEF": "BoxTransform",
-              "translation": [-8, 1, 0],
-              "rotation": [0, 1, 0, 0.785],
-              "children": [
+              "@DEF": "BoxTransform",
+              "@translation": [-8, 1, 0],
+              "@rotation": [0, 1, 0, 0.785],
+              "-children": [
                 {
                   "Shape": {
-                    "geometry": { "Box": { "size": [2, 2, 2] } },
-                    "appearance": { "Appearance": { "material": { "Material": { "DEF": "RedMaterial", "diffuseColor": [1, 0.2, 0.2], "specularColor": [1, 1, 1], "shininess": 0.8 } } } }
+                    "-geometry": {
+                      "Box": { "@size": [2, 2, 2] }
+                    },
+                    "-appearance": {
+                      "Appearance": {
+                        "-material": {
+                          "Material": {
+                            "@DEF": "RedMaterial",
+                            "@diffuseColor": [1, 0.2, 0.2],
+                            "@specularColor": [1, 1, 1],
+                            "@shininess": 0.8
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               ]
             }
           },
-          // Transparent Sphere
-          {
-            "Transform": {
-              "translation": [-4, 1.5, 0],
-              "children": [{ "Shape": { "geometry": { "Sphere": { "radius": 1.5 } }, "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [0.2, 1, 0.2], "transparency": 0.3 } } } } } }]
-            }
-          },
-          // Cone
-          { "Transform": { "translation": [0, 1, 0], "children": [{ "Shape": { "geometry": { "Cone": { "height": 3, "bottomRadius": 1.5 } }, "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [0.2, 0.2, 1] } } } } } }] } },
-          // Cylinder
-          { "Transform": { "translation": [4, 1, 0], "rotation": [1, 0, 0, 1.57], "children": [{ "Shape": { "geometry": { "Cylinder": { "height": 3, "radius": 1 } }, "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [1, 1, 0.2] } } } } } }] } },
-          // Torus
-          { "Transform": { "translation": [8, 1, 0], "children": [{ "Shape": { "geometry": { "Torus": { "outerRadius": 1.5, "innerRadius": 0.5 } }, "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [1, 0.5, 0.2] } } } } } }] } },
 
-          // IndexedFaceSet (Pyramid)
+          // ── Transparent Sphere ────────────────────────────────────────────
           {
             "Transform": {
-              "translation": [0, 0, -5],
-              "children": [{
-                "Shape": {
-                  "geometry": {
-                    "IndexedFaceSet": {
-                      "coord": { "Coordinate": { "point": [[0, 2, 0], [-1, 0, 1], [1, 0, 1], [1, 0, -1], [-1, 0, -1]] } },
-                      "coordIndex": [0, 1, 2, -1, 0, 2, 3, -1, 0, 3, 4, -1, 0, 4, 1, -1, 1, 4, 3, 2, -1],
-                      "color": { "Color": { "color": [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [0.5, 0.5, 0.5]] } }
-                    }
-                  },
-                  "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [0.8, 0.8, 0.8] } } } }
-                }
-              }]
-            }
-          },
-
-          // IndexedLineSet
-          {
-            "Transform": {
-              "translation": [0, 3, 5],
-              "children": [{
-                "Shape": {
-                  "geometry": {
-                    "IndexedLineSet": {
-                      "coord": { "Coordinate": { "point": [[-2, 0, 0], [2, 0, 0], [0, 0, -2], [0, 0, 2], [0, -2, 0], [0, 2, 0]] } },
-                      "coordIndex": [0, 1, -1, 2, 3, -1, 4, 5, -1],
-                      "color": { "Color": { "color": [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]] } }
+              "@translation": [-4, 1.5, 0],
+              "-children": [
+                {
+                  "Shape": {
+                    "-geometry": { "Sphere": { "@radius": 1.5 } },
+                    "-appearance": {
+                      "Appearance": {
+                        "-material": {
+                          "Material": {
+                            "@diffuseColor": [0.2, 1, 0.2],
+                            "@transparency": 0.3
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              }]
+              ]
             }
           },
 
-          // Billboard Text
+          // ── Cone ──────────────────────────────────────────────────────────
+          {
+            "Transform": {
+              "@translation": [0, 1, 0],
+              "-children": [
+                {
+                  "Shape": {
+                    "-geometry": { "Cone": { "@height": 3, "@bottomRadius": 1.5 } },
+                    "-appearance": {
+                      "Appearance": {
+                        "-material": { "Material": { "@diffuseColor": [0.2, 0.2, 1] } }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+
+          // ── Cylinder ──────────────────────────────────────────────────────
+          {
+            "Transform": {
+              "@translation": [4, 1, 0],
+              "@rotation": [1, 0, 0, 1.57],
+              "-children": [
+                {
+                  "Shape": {
+                    "-geometry": { "Cylinder": { "@height": 3, "@radius": 1 } },
+                    "-appearance": {
+                      "Appearance": {
+                        "-material": { "Material": { "@diffuseColor": [1, 1, 0.2] } }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+
+          // ── Torus ─────────────────────────────────────────────────────────
+          {
+            "Transform": {
+              "@translation": [8, 1, 0],
+              "-children": [
+                {
+                  "Shape": {
+                    "-geometry": {
+                      "Torus": { "@outerRadius": 1.5, "@innerRadius": 0.5 }
+                    },
+                    "-appearance": {
+                      "Appearance": {
+                        "-material": { "Material": { "@diffuseColor": [1, 0.5, 0.2] } }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+
+          // ── IndexedFaceSet (Pyramid) ───────────────────────────────────────
+          {
+            "Transform": {
+              "@translation": [0, 0, -5],
+              "-children": [
+                {
+                  "Shape": {
+                    "-geometry": {
+                      "IndexedFaceSet": {
+                        "-coord": {
+                          "Coordinate": {
+                            "@point": [
+                              0,2,0, -1,0,1, 1,0,1, 1,0,-1, -1,0,-1
+                            ]
+                          }
+                        },
+                        "@coordIndex": [0, 1, 2, -1, 0, 2, 3, -1, 0, 3, 4, -1, 0, 4, 1, -1, 1, 4, 3, 2, -1],
+                        "-color": {
+                          "Color": {
+                            "@color": [
+                              1,0,0, 0,1,0, 0,0,1, 1,1,0, 0.5,0.5,0.5
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "-appearance": {
+                      "Appearance": {
+                        "-material": { "Material": { "@diffuseColor": [0.8, 0.8, 0.8] } }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+
+          // ── IndexedLineSet ────────────────────────────────────────────────
+          {
+            "Transform": {
+              "@translation": [0, 3, 5],
+              "-children": [
+                {
+                  "Shape": {
+                    "-geometry": {
+                      "IndexedLineSet": {
+                        "-coord": {
+                          "Coordinate": {
+                            "@point": [
+                              -2,0,0, 2,0,0,
+                               0,0,-2, 0,0,2,
+                               0,-2,0, 0,2,0
+                            ]
+                          }
+                        },
+                        "@coordIndex": [0, 1, -1, 2, 3, -1, 4, 5, -1],
+                        "-color": {
+                          "Color": {
+                            "@color": [
+                              1,0,0, 1,0,0,
+                              0,1,0, 0,1,0,
+                              0,0,1, 0,0,1
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+
+          // ── Billboard Text ────────────────────────────────────────────────
           {
             "Billboard": {
-              "DEF": "TextBillboard",
-              "children": [{
-                "Transform": {
-                  "translation": [0, 6, 0],
-                  "children": [{
-                    "Shape": {
-                      "geometry": { "Text": { "string": ["X3D", "WebGPU"], "fontStyle": { "FontStyle": { "size": 0.8 } } } },
-                      "appearance": { "Appearance": { "material": { "Material": { "diffuseColor": [1, 1, 0], "emissiveColor": [0.5, 0.5, 0] } } } }
-                    }
-                  }]
+              "@DEF": "TextBillboard",
+              "-children": [
+                {
+                  "Transform": {
+                    "@translation": [0, 6, 0],
+                    "-children": [
+                      {
+                        "Shape": {
+                          "-geometry": {
+                            "Text": {
+                              "@string": ["X3D", "WebGPU"],
+                              "-fontStyle": { "FontStyle": { "@size": 0.8 } }
+                            }
+                          },
+                          "-appearance": {
+                            "Appearance": {
+                              "-material": {
+                                "Material": {
+                                  "@diffuseColor": [1, 1, 0],
+                                  "@emissiveColor": [0.5, 0.5, 0]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
                 }
-              }]
+              ]
             }
           },
 
-          // Animation Logic
-          { "TimeSensor": { "DEF": "Clock", "cycleInterval": 5, "loop": true, "enabled": true } },
-          { "PositionInterpolator": { "DEF": "BoxMover", "key": [0, 0.25, 0.5, 0.75, 1], "keyValue": [[-8, 1, 0], [-8, 3, 0], [-8, 1, 0], [-8, -1, 0], [-8, 1, 0]] } },
-          { "OrientationInterpolator": { "DEF": "BoxRotator", "key": [0, 0.5, 1], "keyValue": [[0, 1, 0, 0], [0, 1, 0, 3.14159], [0, 1, 0, 6.28318]] } },
-          { "ColorInterpolator": { "DEF": "ColorChanger", "key": [0, 0.33, 0.66, 1], "keyValue": [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]] } },
+          // ── Animation nodes ───────────────────────────────────────────────
+          {
+            "TimeSensor": {
+              "@DEF": "Clock",
+              "@cycleInterval": 5,
+              "@loop": true,
+              "@enabled": true
+            }
+          },
+          {
+            "PositionInterpolator": {
+              "@DEF": "BoxMover",
+              "@key": [0, 0.25, 0.5, 0.75, 1],
+              "@keyValue": [
+                -8,1,0, -8,3,0, -8,1,0, -8,-1,0, -8,1,0
+              ]
+            }
+          },
+          {
+            "OrientationInterpolator": {
+              "@DEF": "BoxRotator",
+              "@key": [0, 0.5, 1],
+              "@keyValue": [
+                0,1,0,0, 0,1,0,3.14159, 0,1,0,6.28318
+              ]
+            }
+          },
+          {
+            "ColorInterpolator": {
+              "@DEF": "ColorChanger",
+              "@key": [0, 0.33, 0.66, 1],
+              "@keyValue": [
+                1,0,0, 0,1,0, 0,0,1, 1,0,0
+              ]
+            }
+          },
 
-          // Routes
-          { "ROUTE": { "fromNode": "Clock", "fromField": "fraction_changed", "toNode": "BoxMover", "toField": "set_fraction" } },
-          { "ROUTE": { "fromNode": "BoxMover", "fromField": "value_changed", "toNode": "BoxTransform", "toField": "set_translation" } },
-          { "ROUTE": { "fromNode": "Clock", "fromField": "fraction_changed", "toNode": "BoxRotator", "toField": "set_fraction" } },
-          { "ROUTE": { "fromNode": "BoxRotator", "fromField": "value_changed", "toNode": "BoxTransform", "toField": "set_rotation" } },
-          { "ROUTE": { "fromNode": "Clock", "fromField": "fraction_changed", "toNode": "ColorChanger", "toField": "set_fraction" } },
-          { "ROUTE": { "fromNode": "ColorChanger", "fromField": "value_changed", "toNode": "RedMaterial", "toField": "set_diffuseColor" } }
+          // ── Routes ────────────────────────────────────────────────────────
+          { "ROUTE": { "@fromNode": "Clock",       "@fromField": "fraction_changed", "@toNode": "BoxMover",    "@toField": "set_fraction"   } },
+          { "ROUTE": { "@fromNode": "BoxMover",    "@fromField": "value_changed",    "@toNode": "BoxTransform","@toField": "set_translation" } },
+          { "ROUTE": { "@fromNode": "Clock",       "@fromField": "fraction_changed", "@toNode": "BoxRotator",  "@toField": "set_fraction"   } },
+          { "ROUTE": { "@fromNode": "BoxRotator",  "@fromField": "value_changed",    "@toNode": "BoxTransform","@toField": "set_rotation"   } },
+          { "ROUTE": { "@fromNode": "Clock",       "@fromField": "fraction_changed", "@toNode": "ColorChanger","@toField": "set_fraction"   } },
+          { "ROUTE": { "@fromNode": "ColorChanger","@fromField": "value_changed",    "@toNode": "RedMaterial", "@toField": "set_diffuseColor"} }
         ]
       }
     }
@@ -142,6 +344,63 @@ export default function App() {
   useEffect(() => {
     setJsonInput(JSON.stringify(defaultScene, null, 2));
   }, []);
+
+  // ── Schema validation via @hyperjump/json-schema ─────────────────────────
+  const runSchemaValidation = async (instance) => {
+    try {
+      const schemaResp = await fetch(X3D_SCHEMA_URI);
+      if (!schemaResp.ok) throw new Error(`HTTP ${schemaResp.status}`);
+      const schema = await schemaResp.json();
+      registerSchema(schema, X3D_SCHEMA_URI);
+      const output = await validate(X3D_SCHEMA_URI, instance, BASIC);
+					for (let e in output.errors) {
+						let error = output.errors[e];
+						if (!error.keyword.endsWith("validate")) {
+							console.log("keyword:", error.keyword.substr(error.keyword.lastIndexOf("/")+1));
+							////////////////////////////////////////////////////////
+							let schemaPath = error.absoluteKeywordLocation.substr(error.absoluteKeywordLocation.lastIndexOf("#")+2).replaceAll("/", " > ");
+							console.log("schema location:", schemaPath);
+							let schemaSelectedObject = selectObjectFromJson(schema, schemaPath);
+							console.log( "schema value:", JSON.stringify(schemaSelectedObject,
+								function(k, v) {
+								    let v2 = JSON.parse(JSON.stringify(v));
+								    if (typeof v2 === 'object') {
+									    for (let o in v2) {
+										    /*
+										if (typeof v2[o] === 'object') {
+											    v2[o] = "|omitted|";
+										}
+										*/
+									    }
+								    }
+								    return v2;
+								}));
+
+							////////////////////////////////////////////////////////
+							let instancePath = error.instanceLocation.substr(error.instanceLocation.lastIndexOf("#")+2).replaceAll("/", " > ");
+							console.log("instance location:", instancePath)
+							let instanceSelectedObject = selectObjectFromJson(instance, instancePath);
+							console.log("instance value:", JSON.stringify(instanceSelectedObject));
+							console.log( "instance shorthand value:", JSON.stringify(instanceSelectedObject,
+								function(k, v) {
+								    let v2 = JSON.parse(JSON.stringify(v));
+								    if (typeof v2 === 'object') {
+									    for (let o in v2) {
+										if (typeof v2[o] === 'object') {
+											    v2[o] = "|omitted|";
+										}
+									    }
+								    }
+								    return v2;
+								}));
+							console.log();
+						}
+					}
+      setValidation({ valid: output.valid, errors: output.errors ?? [] });
+    } catch (e) {
+      setValidation({ valid: null, message: `Schema unavailable: ${e.message}` });
+    }
+  };
 
   useEffect(() => {
     if (!jsonInput) return;
@@ -168,7 +427,11 @@ export default function App() {
         const container = containerRef.current;
         if (!container) return;
 
-        // 1. Setup Three.js
+        // 1. Parse + validate JSON
+        const x3dData = JSON.parse(jsonInput);
+        runSchemaValidation(x3dData); // async, non-blocking
+
+        // 2. Setup Three.js
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a2e);
         clock = new THREE.Clock();
@@ -179,7 +442,7 @@ export default function App() {
         camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
         camera.position.set(0, 5, 20);
 
-        // 2. Setup WebGPU Renderer
+        // 3. Setup WebGPU Renderer
         renderer = new WebGPURenderer({ antialias: true });
         await renderer.init();
         renderer.setSize(width, height);
@@ -194,41 +457,35 @@ export default function App() {
         const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
         scene.add(ambientLight);
 
-        // 3. Parse X3D
-        const x3dData = JSON.parse(jsonInput);
+        // 4. Parse X3D scene graph
         if (x3dData.X3D?.Scene) {
           await parseNode(x3dData.X3D.Scene, scene);
         }
 
-        // 4. Process Routes
+        // 5. Process Routes
         processRoutes();
 
-        // 5. Animation Loop
+        // 6. Animation Loop
         const animate = () => {
           const elapsedTime = clock.getElapsedTime();
 
-          // A. Update TimeSensors
           timeSensors.forEach(sensor => {
             if (sensor.enabled && sensor.loop) {
-              const fraction = (elapsedTime % sensor.cycleInterval) / sensor.cycleInterval;
-              sensor.fraction_changed = fraction;
+              sensor.fraction_changed =
+                (elapsedTime % sensor.cycleInterval) / sensor.cycleInterval;
             }
           });
 
-          // B. Execute Route Transfers
           routeUpdates.forEach(fn => fn());
-
-          // C. Update Billboards
           billboards.forEach(b => b.lookAt(camera.position));
 
-          // D. Render
           controls.update();
           renderer.render(scene, camera);
         };
 
         renderer.setAnimationLoop(animate);
 
-        // 6. Resize Handling
+        // 7. Resize Handling
         resizeObserver = new ResizeObserver((entries) => {
           for (const entry of entries) {
             const { width, height } = entry.contentRect;
@@ -251,73 +508,119 @@ export default function App() {
       }
     };
 
-    // --- PARSER LOGIC ---
+    // ── Parser ──────────────────────────────────────────────────────────────
+
+    /**
+     * Walk a node's MFNode "-children" array and attach objects to parent.
+     * In X3D JSON, MFNode / SFNode fields carry a "-" prefix; simple fields "@".
+     */
+    // Split a flat array into consecutive tuples of size n
+    const chunk = (arr, n) => {
+      const out = [];
+      for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+      return out;
+    };
 
     const parseNode = async (node, parent) => {
-      if (node.children) {
-        for (const child of node.children) {
+      const children = node['-children'];
+      if (children) {
+        for (const child of children) {
           await parseChild(child, parent);
         }
       }
     };
 
     const parseChild = async (child, parent) => {
-      const defName = child.DEF || Object.values(child)[0]?.DEF;
+      // DEF lives inside the node object, e.g. child.Transform["@DEF"]
+      const defName = Object.values(child)[0]?.['@DEF'];
       let object = null;
 
       if (child.Transform) {
         object = createTransform(child.Transform);
         await parseNode(child.Transform, object);
+
       } else if (child.Group) {
         object = new THREE.Group();
         await parseNode(child.Group, object);
+
       } else if (child.Billboard) {
         object = new THREE.Group();
         billboards.push(object);
         await parseNode(child.Billboard, object);
+
       } else if (child.Shape) {
         object = await createShape(child.Shape);
 
-      // Lights
+      // ── Lights ───────────────────────────────────────────────────────────
       } else if (child.DirectionalLight) {
         const d = child.DirectionalLight;
-        object = new THREE.DirectionalLight(new THREE.Color(...(d.color || [1,1,1])), d.intensity || 1);
-        if (d.direction) object.position.copy(new THREE.Vector3(...d.direction).negate().multiplyScalar(10));
+        object = new THREE.DirectionalLight(
+          new THREE.Color(...(d['@color'] || [1, 1, 1])),
+          d['@intensity'] ?? 1
+        );
+        if (d['@direction'])
+          object.position.copy(
+            new THREE.Vector3(...d['@direction']).negate().multiplyScalar(10)
+          );
+
       } else if (child.PointLight) {
         const p = child.PointLight;
-        object = new THREE.PointLight(new THREE.Color(...(p.color || [1,1,1])), p.intensity || 1);
-        if (p.location) object.position.set(...p.location);
+        object = new THREE.PointLight(
+          new THREE.Color(...(p['@color'] || [1, 1, 1])),
+          p['@intensity'] ?? 1
+        );
+        if (p['@location']) object.position.set(...p['@location']);
+
       } else if (child.SpotLight) {
         const s = child.SpotLight;
-        object = new THREE.SpotLight(new THREE.Color(...(s.color || [1,1,1])), s.intensity || 1);
-        if (s.location) object.position.set(...s.location);
-        if (s.direction) {
+        object = new THREE.SpotLight(
+          new THREE.Color(...(s['@color'] || [1, 1, 1])),
+          s['@intensity'] ?? 1
+        );
+        if (s['@location']) object.position.set(...s['@location']);
+        if (s['@direction']) {
           const target = new THREE.Object3D();
-          target.position.copy(object.position).add(new THREE.Vector3(...s.direction));
+          target.position
+            .copy(object.position)
+            .add(new THREE.Vector3(...s['@direction']));
           object.target = target;
           scene.add(target);
         }
-        if (s.angle) object.angle = s.angle;
+        if (s['@angle'] !== undefined) object.angle = s['@angle'];
 
-      // Environment
+      // ── Environment ───────────────────────────────────────────────────────
       } else if (child.Background) {
-        if (child.Background.skyColor) scene.background = new THREE.Color(...child.Background.skyColor[0]);
+        const bg = child.Background;
+        if (bg['@skyColor']) {
+          const [r, g, b] = bg['@skyColor'];
+          scene.background = new THREE.Color(r, g, b);
+        }
         if (defName) defRegistry.set(defName, scene.background);
 
-      // Animation
+      // ── Animation ─────────────────────────────────────────────────────────
       } else if (child.TimeSensor) {
-        const ts = { ...child.TimeSensor, fraction_changed: 0, enabled: true, loop: true };
+        const raw = child.TimeSensor;
+        const ts = {
+          cycleInterval: raw['@cycleInterval'] ?? 1,
+          loop:    raw['@loop']    !== false,
+          enabled: raw['@enabled'] !== false,
+          fraction_changed: 0
+        };
         timeSensors.push(ts);
         if (defName) defRegistry.set(defName, ts);
+
       } else if (child.PositionInterpolator) {
         const pi = createInterpolator(child.PositionInterpolator, 3);
         if (defName) defRegistry.set(defName, pi);
+
       } else if (child.OrientationInterpolator) {
         const oi = createInterpolator(child.OrientationInterpolator, 4);
         if (defName) defRegistry.set(defName, oi);
+
       } else if (child.ColorInterpolator) {
         const ci = createInterpolator(child.ColorInterpolator, 3);
         if (defName) defRegistry.set(defName, ci);
+
       } else if (child.ROUTE) {
         routes.push(child.ROUTE);
       }
@@ -328,257 +631,253 @@ export default function App() {
       }
     };
 
-    // --- FACTORIES ---
+    // ── Factories ────────────────────────────────────────────────────────────
 
     const createTransform = (data) => {
       const group = new THREE.Group();
-      if (data.translation) group.position.set(...data.translation);
-      if (data.rotation) {
-        const [x, y, z, angle] = data.rotation;
-        group.setRotationFromAxisAngle(new THREE.Vector3(x,y,z).normalize(), angle);
+      if (data['@translation']) group.position.set(...data['@translation']);
+      if (data['@rotation']) {
+        const [x, y, z, angle] = data['@rotation'];
+        group.setRotationFromAxisAngle(new THREE.Vector3(x, y, z).normalize(), angle);
       }
-      if (data.scale) group.scale.set(...data.scale);
+      if (data['@scale']) group.scale.set(...data['@scale']);
       return group;
     };
 
-const createShape = async (data) => {
-  let geo = await createGeometry(data.geometry);
-  let mat = createMaterial(data.appearance);
-  
-  // Handle Groups (for multi-line text)
-  if (geo && geo.isGroup) {
-    geo.traverse((child) => {
-      if (child.isMesh) {
-        // Use simpler material for flat text
-        const textMat = new THREE.MeshBasicMaterial({ 
-          color: mat.color,
-          side: THREE.FrontSide 
+    const createShape = async (data) => {
+      // Shape fields: "-geometry" (SFNode), "-appearance" (SFNode)
+      const geo = await createGeometry(data['-geometry']);
+      const mat = createMaterial(data['-appearance']);
+
+      if (geo && geo.isGroup) {
+        geo.traverse((child) => {
+          if (child.isMesh) {
+            child.material = new THREE.MeshBasicMaterial({
+              color: mat.color,
+              side: THREE.FrontSide
+            });
+          }
         });
-        child.material = textMat;
+        return geo;
       }
-    });
-    return geo;
-  }
-  
-  if (geo && mat) {
-    if (geo.isLineGeometry) return new THREE.LineSegments(geo, mat);
-    if (geo.isPointGeometry) return new THREE.Points(geo, mat);
-    return new THREE.Mesh(geo, mat);
-  }
-  return null;
-};
+
+      if (geo && mat) {
+        if (geo.isLineGeometry) return new THREE.LineSegments(geo, mat);
+        if (geo.isPointGeometry) return new THREE.Points(geo, mat);
+        return new THREE.Mesh(geo, mat);
+      }
+      return null;
+    };
 
     const createGeometry = async (data) => {
       if (!data) return null;
-      if (data.Box) return new THREE.BoxGeometry(...(data.Box.size || [1,1,1]));
-      if (data.Sphere) return new THREE.SphereGeometry(data.Sphere.radius || 1, 32, 32);
-      if (data.Cone) return new THREE.ConeGeometry(data.Cone.bottomRadius || 1, data.Cone.height || 2, 32);
-      if (data.Cylinder) return new THREE.CylinderGeometry(data.Cylinder.radius || 1, data.Cylinder.radius || 1, data.Cylinder.height || 2, 32);
-      if (data.Torus) return new THREE.TorusGeometry(data.Torus.outerRadius || 1, data.Torus.innerRadius || 0.4, 16, 32);
+
+      if (data.Box)
+        return new THREE.BoxGeometry(...(data.Box['@size'] || [1, 1, 1]));
+
+      if (data.Sphere)
+        return new THREE.SphereGeometry(data.Sphere['@radius'] ?? 1, 32, 32);
+
+      if (data.Cone)
+        return new THREE.ConeGeometry(
+          data.Cone['@bottomRadius'] ?? 1,
+          data.Cone['@height'] ?? 2,
+          32
+        );
+
+      if (data.Cylinder)
+        return new THREE.CylinderGeometry(
+          data.Cylinder['@radius'] ?? 1,
+          data.Cylinder['@radius'] ?? 1,
+          data.Cylinder['@height'] ?? 2,
+          32
+        );
+
+      if (data.Torus)
+        return new THREE.TorusGeometry(
+          data.Torus['@outerRadius'] ?? 1,
+          data.Torus['@innerRadius'] ?? 0.4,
+          16, 32
+        );
+
       if (data.IndexedFaceSet) return createIndexedFaceSet(data.IndexedFaceSet);
       if (data.IndexedLineSet) return createIndexedLineSet(data.IndexedLineSet);
-      if (data.PointSet) return createPointSet(data.PointSet);
-      if (data.Text) return createTextGeometry(data.Text);
-      if (data.Extrusion) return createExtrusion(data.Extrusion);
-      if (data.ElevationGrid) return createElevationGrid(data.ElevationGrid);
+      if (data.PointSet)       return createPointSet(data.PointSet);
+      if (data.Text)           return createTextGeometry(data.Text);
+      if (data.Extrusion)      return createExtrusion(data.Extrusion);
+      if (data.ElevationGrid)  return createElevationGrid(data.ElevationGrid);
+
       return null;
     };
 
     const createMaterial = (appearance) => {
-      if (!appearance?.Appearance?.material?.Material) return new THREE.MeshStandardMaterial({ color: 0x888888 });
-      const m = appearance.Appearance.material.Material;
+      // "-appearance" → Appearance → "-material" → Material
+      const m = appearance?.Appearance?.['-material']?.Material;
+      if (!m) return new THREE.MeshStandardMaterial({ color: 0x888888 });
+
       const params = {
-        color: m.diffuseColor ? new THREE.Color(...m.diffuseColor) : 0xffffff,
-        roughness: 1 - (m.shininess || 0.2),
-        metalness: 0.1,
-        vertexColors: false
+        color: m['@diffuseColor']
+          ? new THREE.Color(...m['@diffuseColor'])
+          : 0xffffff,
+        roughness: 1 - (m['@shininess'] ?? 0.2),
+        metalness: 0.1
       };
 
-      if (m.emissiveColor) params.emissive = new THREE.Color(...m.emissiveColor);
-      if (m.transparency) {
+      if (m['@emissiveColor'])
+        params.emissive = new THREE.Color(...m['@emissiveColor']);
+
+      if (m['@transparency']) {
         params.transparent = true;
-        params.opacity = 1 - m.transparency;
+        params.opacity = 1 - m['@transparency'];
       }
 
       const mat = new THREE.MeshStandardMaterial(params);
-      if (m.DEF) defRegistry.set(m.DEF, mat);
+      if (m['@DEF']) defRegistry.set(m['@DEF'], mat);
       return mat;
     };
 
-    // --- GEOMETRY HELPERS ---
+    // ── Geometry helpers ─────────────────────────────────────────────────────
 
     const createIndexedFaceSet = (ifs) => {
       const geo = new THREE.BufferGeometry();
-      const points = ifs.coord?.Coordinate?.point || [];
-      const indices = ifs.coordIndex || [];
-      const colors = ifs.color?.Color?.color || [];
-      const vertices = [];
-      const vertexColors = [];
+      const rawPoints = ifs['-coord']?.Coordinate?.['@point'] || [];
+      const rawColors = ifs['-color']?.Color?.['@color'] || [];
+      const points  = chunk(rawPoints, 3);
+      const colors  = chunk(rawColors, 3);
+      const indices = ifs['@coordIndex'] || [];
+      const vertices = [], vertexColors = [];
 
-      let currentFace = [];
+      let face = [];
       indices.forEach(idx => {
         if (idx === -1) {
-          // Triangulate fan
-          for (let i = 1; i < currentFace.length - 1; i++) {
-            const a = currentFace[0];
-            const b = currentFace[i];
-            const c = currentFace[i+1];
+          for (let i = 1; i < face.length - 1; i++) {
+            const [a, b, c] = [face[0], face[i], face[i + 1]];
             vertices.push(...points[a], ...points[b], ...points[c]);
-            if (colors.length > 0) {
-              vertexColors.push(...(colors[a] || [1,1,1]), ...(colors[b] || [1,1,1]), ...(colors[c] || [1,1,1]));
-            }
+            if (colors.length)
+              vertexColors.push(
+                ...(colors[a] || [1, 1, 1]),
+                ...(colors[b] || [1, 1, 1]),
+                ...(colors[c] || [1, 1, 1])
+              );
           }
-          currentFace = [];
-        } else currentFace.push(idx);
+          face = [];
+        } else face.push(idx);
       });
 
       geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      if (vertexColors.length > 0) geo.setAttribute('color', new THREE.Float32BufferAttribute(vertexColors, 3));
+      if (vertexColors.length)
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(vertexColors, 3));
       geo.computeVertexNormals();
       return geo;
     };
 
     const createIndexedLineSet = (ils) => {
       const geo = new THREE.BufferGeometry();
-      const points = ils.coord?.Coordinate?.point || [];
-      const indices = ils.coordIndex || [];
-      const colors = ils.color?.Color?.color || [];
-      const vertices = [];
-      const vertexColors = [];
+      const rawPoints = ils['-coord']?.Coordinate?.['@point'] || [];
+      const rawColors = ils['-color']?.Color?.['@color'] || [];
+      const points = chunk(rawPoints, 3);
+      const colors = chunk(rawColors, 3);
+      const indices = ils['@coordIndex'] || [];
+      const vertices = [], vertexColors = [];
 
-      let currentLine = [];
+      let line = [];
       indices.forEach(idx => {
-        if (idx === -1) currentLine = [];
-        else {
-          currentLine.push(idx);
-          if (currentLine.length === 2) {
-            vertices.push(...points[currentLine[0]], ...points[currentLine[1]]);
-            if (colors.length > 0) {
-              vertexColors.push(...(colors[currentLine[0]] || [1,1,1]), ...(colors[currentLine[1]] || [1,1,1]));
-            }
-            currentLine.shift();
-          }
+        if (idx === -1) { line = []; return; }
+        line.push(idx);
+        if (line.length === 2) {
+          vertices.push(...points[line[0]], ...points[line[1]]);
+          if (colors.length)
+            vertexColors.push(
+              ...(colors[line[0]] || [1, 1, 1]),
+              ...(colors[line[1]] || [1, 1, 1])
+            );
+          line.shift();
         }
       });
 
       geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      if (vertexColors.length > 0) geo.setAttribute('color', new THREE.Float32BufferAttribute(vertexColors, 3));
+      if (vertexColors.length)
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(vertexColors, 3));
       geo.isLineGeometry = true;
       return geo;
     };
 
     const createPointSet = (ps) => {
       const geo = new THREE.BufferGeometry();
-      const points = ps.coord?.Coordinate?.point || [];
-      const colors = ps.color?.Color?.color || [];
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3));
-      if (colors.length > 0) geo.setAttribute('color', new THREE.Float32BufferAttribute(colors.flat(), 3));
+      const rawPoints = ps['-coord']?.Coordinate?.['@point'] || [];
+      const rawColors = ps['-color']?.Color?.['@color'] || [];
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(rawPoints, 3));
+      if (rawColors.length)
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(rawColors, 3));
       geo.isPointGeometry = true;
       return geo;
     };
 
-const createTextGeometry = async (textData) => {
-  function loadFont(url) {
-    return new Promise((resolve, reject) => {
-      const loader = new FontLoader();
-      loader.load(url, resolve, undefined, reject);
-    });
-  }
+    const createTextGeometry = async (textData) => {
+      const font = await new Promise((resolve, reject) => {
+        new FontLoader().load(
+          'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
+          resolve, undefined, reject
+        );
+      });
 
-  const font = await loadFont('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json');
-	/* helvetiker_regular.typeface.json
-helvetiker_bold.typeface.json
-optimer_regular.typeface.json
-optimer_bold.typeface.json
-gentilis_regular.typeface.json
-gentilis_bold.typeface.json
-droid_sans_regular.typeface.json
-droid_sans_bold.typeface.json
-droid_serif_regular.typeface.json
-droid_serif_bold.typeface.json */
-  const strings = textData.string || ["Text"];
-  const size = textData.fontStyle?.FontStyle?.size || 1;
+      // "@string" is the MFString field; "-fontStyle" is SFNode
+      const strings = textData['@string'] || ['Text'];
+      const size    = textData['-fontStyle']?.FontStyle?.['@size'] ?? 1;
 
-  // Single line
-  if (strings.length === 1) {
-    const geometry = new TextGeometry(strings[0], {
-      font: font,
-      size: size,
-      depth: 0,
-      curveSegments: 12,
-    });
-    geometry.computeVertexNormals();
-    return geometry;
-  }
+      if (strings.length === 1) {
+        const geometry = new TextGeometry(strings[0], { font, size, depth: 0, curveSegments: 12 });
+        geometry.computeVertexNormals();
+        return geometry;
+      }
 
-  // Multi-line: return a Group
-  const group = new THREE.Group();
-  const lineHeight = size * 1.2;
-
-  strings.forEach((str, index) => {
-    const geometry = new TextGeometry(str, {
-      font: font,
-      size: size,
-      depth: 0,
-      curveSegments: 12,
-    });
-
-    geometry.computeVertexNormals();  // Compute normals for each geometry
-
-    const mesh = new THREE.Mesh(geometry);
-    mesh.position.y = -index * lineHeight;
-    group.add(mesh);
-  });
-
-  return group;
-};
+      const group = new THREE.Group();
+      strings.forEach((str, index) => {
+        const geometry = new TextGeometry(str, { font, size, depth: 0, curveSegments: 12 });
+        geometry.computeVertexNormals();
+        const mesh = new THREE.Mesh(geometry);
+        mesh.position.y = -index * size * 1.2;
+        group.add(mesh);
+      });
+      return group;
+    };
 
     const createExtrusion = (ext) => {
-      const crossSection = ext.crossSection || [[1, 1], [1, -1], [-1, -1], [-1, 1], [1, 1]];
-      const spine = ext.spine || [[0, 0, 0], [0, 1, 0]];
+      const crossSection = ext['@crossSection'] || [[1,1],[1,-1],[-1,-1],[-1,1],[1,1]];
+      const spine        = ext['@spine']        || [[0,0,0],[0,1,0]];
       const shape = new THREE.Shape();
       crossSection.forEach((p, i) => {
         if (i === 0) shape.moveTo(p[0], p[1]);
-        else shape.lineTo(p[0], p[1]);
+        else         shape.lineTo(p[0], p[1]);
       });
       return new THREE.ExtrudeGeometry(shape, {
-        steps: spine.length,
-        depth: 1, // Simplified depth mapping from spine
-        bevelEnabled: false
+        steps: spine.length, depth: 1, bevelEnabled: false
       });
     };
 
     const createElevationGrid = (eg) => {
-      const xDim = eg.xDimension || 2;
-      const zDim = eg.zDimension || 2;
-      const xSpacing = eg.xSpacing || 1;
-      const zSpacing = eg.zSpacing || 1;
-      const heights = eg.height || [];
-      const geo = new THREE.BufferGeometry();
+      const xDim    = eg['@xDimension'] ?? 2;
+      const zDim    = eg['@zDimension'] ?? 2;
+      const xSpacing= eg['@xSpacing']   ?? 1;
+      const zSpacing= eg['@zSpacing']   ?? 1;
+      const heights = eg['@height']     || [];
+      const geo     = new THREE.BufferGeometry();
       const vertices = [];
 
-      // Create quad faces
       for (let z = 0; z < zDim - 1; z++) {
         for (let x = 0; x < xDim - 1; x++) {
-          const i1 = z * xDim + x;
-          const i2 = z * xDim + (x + 1);
-          const i3 = (z + 1) * xDim + (x + 1);
-          const i4 = (z + 1) * xDim + x;
-
-          const h1 = heights[i1] || 0;
-          const h2 = heights[i2] || 0;
-          const h3 = heights[i3] || 0;
-          const h4 = heights[i4] || 0;
-
-          // Triangle 1
-          vertices.push(x*xSpacing, h1, z*zSpacing);
-          vertices.push((x+1)*xSpacing, h2, z*zSpacing);
-          vertices.push((x+1)*xSpacing, h3, (z+1)*zSpacing);
-
-          // Triangle 2
-          vertices.push(x*xSpacing, h1, z*zSpacing);
-          vertices.push((x+1)*xSpacing, h3, (z+1)*zSpacing);
-          vertices.push(x*xSpacing, h4, (z+1)*zSpacing);
+          const [i1,i2,i3,i4] = [
+            z*xDim+x, z*xDim+(x+1), (z+1)*xDim+(x+1), (z+1)*xDim+x
+          ];
+          const [h1,h2,h3,h4] = [heights[i1]||0, heights[i2]||0, heights[i3]||0, heights[i4]||0];
+          vertices.push(
+            x*xSpacing,     h1, z*zSpacing,
+            (x+1)*xSpacing, h2, z*zSpacing,
+            (x+1)*xSpacing, h3, (z+1)*zSpacing,
+            x*xSpacing,     h1, z*zSpacing,
+            (x+1)*xSpacing, h3, (z+1)*zSpacing,
+            x*xSpacing,     h4, (z+1)*zSpacing
+          );
         }
       }
       geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -586,18 +885,18 @@ droid_serif_bold.typeface.json */
       return geo;
     };
 
-    // --- INTERPOLATOR LOGIC ---
-    const createInterpolator = (data, dims) => ({
-      key: data.key,
-      keyValue: data.keyValue,
-      value_changed: null,
-      set_fraction: function(f) {
-        for(let i=0; i<this.key.length-1; i++) {
-          if (f >= this.key[i] && f <= this.key[i+1]) {
-            const t = (f - this.key[i]) / (this.key[i+1] - this.key[i]);
-            const v1 = this.keyValue[i];
-            const v2 = this.keyValue[i+1];
+    // ── Interpolators ─────────────────────────────────────────────────────────
 
+    const createInterpolator = (data, dims) => ({
+      key:     data['@key'],
+      keyValue: chunk(data['@keyValue'], dims),
+      value_changed: null,
+      set_fraction(f) {
+        for (let i = 0; i < this.key.length - 1; i++) {
+          if (f >= this.key[i] && f <= this.key[i + 1]) {
+            const t  = (f - this.key[i]) / (this.key[i + 1] - this.key[i]);
+            const v1 = this.keyValue[i];
+            const v2 = this.keyValue[i + 1];
             if (dims === 3) {
               this.value_changed = [
                 v1[0] + t * (v2[0] - v1[0]),
@@ -617,28 +916,33 @@ droid_serif_bold.typeface.json */
       }
     });
 
-    // --- ROUTE PROCESSING ---
+    // ── Routes ────────────────────────────────────────────────────────────────
+    // ROUTE fields: "@fromNode", "@fromField", "@toNode", "@toField"
+
     const processRoutes = () => {
       routes.forEach(r => {
-        const from = defRegistry.get(r.fromNode);
-        const to = defRegistry.get(r.toNode);
+        const from = defRegistry.get(r['@fromNode']);
+        const to   = defRegistry.get(r['@toNode']);
+        if (!from || !to) return;
 
-        if (from && to) {
-          routeUpdates.push(() => {
-            if (from.fraction_changed !== undefined && to.set_fraction) {
-              to.set_fraction(from.fraction_changed);
+        routeUpdates.push(() => {
+          if (from.fraction_changed !== undefined && to.set_fraction)
+            to.set_fraction(from.fraction_changed);
+
+          if (from.value_changed) {
+            const tf = r['@toField'];
+            if (tf === 'set_translation' && to.position)
+              to.position.set(...from.value_changed);
+            else if (tf === 'set_rotation' && to.setRotationFromAxisAngle) {
+              const [x, y, z, a] = from.value_changed;
+              to.setRotationFromAxisAngle(new THREE.Vector3(x, y, z).normalize(), a);
             }
-            if (from.value_changed) {
-              if (r.toField === 'set_translation' && to.position) to.position.set(...from.value_changed);
-              else if (r.toField === 'set_rotation' && to.setRotationFromAxisAngle) {
-                const [x,y,z,a] = from.value_changed;
-                to.setRotationFromAxisAngle(new THREE.Vector3(x,y,z).normalize(), a);
-              }
-              else if (r.toField === 'set_scale' && to.scale) to.scale.set(...from.value_changed);
-              else if (r.toField === 'set_diffuseColor' && to.color) to.color.setRGB(...from.value_changed);
-            }
-          });
-        }
+            else if (tf === 'set_scale' && to.scale)
+              to.scale.set(...from.value_changed);
+            else if (tf === 'set_diffuseColor' && to.color)
+              to.color.setRGB(...from.value_changed);
+          }
+        });
       });
     };
 
@@ -648,15 +952,26 @@ droid_serif_bold.typeface.json */
       if (resizeObserver) resizeObserver.disconnect();
       if (renderer) {
         renderer.setAnimationLoop(null);
-        try { renderer.dispose(); } catch(e){}
+        try { renderer.dispose(); } catch (e) {}
       }
     };
   }, [jsonInput]);
+
+  // ── Validation badge ──────────────────────────────────────────────────────
+  const validationBadge = (() => {
+    if (!validation) return null;
+    if (validation.valid === null)
+      return <span className="badge badge-warn" title={validation.message}>⚠ Schema N/A</span>;
+    return validation.valid
+      ? <span className="badge badge-ok">✔ X3D Valid</span>
+      : <span className="badge badge-err" title={JSON.stringify(validation.errors, null, 2)}>✘ Invalid ({validation.errors?.length ?? '?'} error(s))</span>;
+  })();
 
   return (
     <div className="app-container">
       <div className="header">
         <h1>X3D WebGPU Renderer</h1>
+        {validationBadge}
       </div>
 
       {error && <div className="error-bar">{error}</div>}
@@ -664,39 +979,20 @@ droid_serif_bold.typeface.json */
       <div className="main-content">
         <div className="sidebar">
           <textarea
-	    id="jsonContent"
+            id="jsonContent"
             className="json-input"
             value={jsonInput}
             onChange={(e) => setJsonInput(e.target.value)}
             spellCheck={false}
           />
-          <button className="btn" onClick={() => {
-		  /*
-	  <div id="myModal" style="display:none; position:fixed; top:20%; left:30%; background:white; border:1px solid #ccc; padding:20px;">
-  		<button onclick="document.getElementById('myModal').style.display='none'">Close</button>
-	  </div>
-	        function displayInModal(data) {
-		  const modal = document.getElementById('myModal');
-		  const content = document.getElementById('jsonContent');
-		  content.textContent = JSON.stringify(data, null, 2); // Preserves formatting
-		  modal.style.display = 'block';
-		}
-	        async function showJsonPopup(url) {
-		  try {
-		    const response = await fetch(url);
-		    if (!response.ok) throw new Error('Network response was not ok');
-		    const data = await response.json();
-
-		    // Pass the data to your chosen popup method
-		    displayInModal(data);
-		  } catch (error) {
-		    console.error('Error fetching JSON:', error);
-		  }
-		}
-		showJsonPopup(prompt("Please enter a URL:"));
-		  */
-             const temp = jsonInput; setJsonInput(''); setTimeout(() => setJsonInput(temp), 10);
-          }}>
+          <button
+            className="btn"
+            onClick={() => {
+              const temp = jsonInput;
+              setJsonInput('');
+              setTimeout(() => setJsonInput(temp), 10);
+            }}
+          >
             Reload Scene
           </button>
         </div>
