@@ -7,7 +7,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
-import gramps from './HumanoidComplete.json';
 
 import { loadX3DHumanoid } from './X3DHumanoidLoader.js';
 
@@ -352,7 +351,7 @@ export default function App() {
               ]
             }
           },
-	  { "Inline": { "@url" : [ "src/HumanoidComplete.json" ] } },
+	        { "Inline": { "@url" : [ "src/HumanoidComplete.json" ] } },
           // ── Routes ────────────────────────────────────────────────────────
           { "ROUTE": { "@fromNode": "Clock",       "@fromField": "fraction_changed", "@toNode": "BoxMover",    "@toField": "set_fraction"   } },
           { "ROUTE": { "@fromNode": "BoxMover",    "@fromField": "value_changed",    "@toNode": "BoxTransform","@toField": "set_translation" } },
@@ -389,13 +388,7 @@ export default function App() {
 								function(k, v) {
 								    let v2 = JSON.parse(JSON.stringify(v));
 								    if (typeof v2 === 'object') {
-									    for (let o in v2) {
-										    /*
-										if (typeof v2[o] === 'object') {
-											    v2[o] = "|omitted|";
-										}
-										*/
-									    }
+									    for (let o in v2) {}
 								    }
 								    return v2;
 								}));
@@ -444,6 +437,7 @@ export default function App() {
     const timeSensors = [];
     const routeUpdates = [];
     const billboards = [];
+    const mixers = []; // Allows for processing any dynamically loaded HAnim mixers
 
     const init = () => {
       async function fetchData() {
@@ -472,7 +466,7 @@ export default function App() {
         await renderer.init();
         renderer.setSize(width, height);
         renderer.setPixelRatio(window.devicePixelRatio);
- 	renderer.outputColorSpace = THREE.SRGBColorSpace;
+ 	      renderer.outputColorSpace = THREE.SRGBColorSpace;
 
         container.innerHTML = '';
         container.appendChild(renderer.domElement);
@@ -483,26 +477,23 @@ export default function App() {
         const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
         scene.add(ambientLight);
 
-        // 4. Parse X3D scene graph
+        // 4. Parse main X3D scene graph recursively
+        // (This waits for ALL inline scenes/humanoids to resolve gracefully)
         if (x3dData.X3D?.Scene) {
           await parseNode(x3dData.X3D.Scene, scene);
         }
-	const { mesh, mixer } = await loadX3DHumanoid(gramps, scene)
-        mesh.frustumCulled = false;
-	scene.add(mesh);
 
-        // 5. Process Routes
+        // 5. Process Routes (This runs globally, resolving refs for main and all inline scenes!)
         processRoutes();
 
         // 6. Animation Loop
-	      // // 6. Animation Loop
         const animate = () => {
           // getDelta() must be called ONLY ONCE per frame!
           const delta = clock.getDelta();
-          // getDelta() automatically updates clock.elapsedTime, so we can just read the property
           const elapsedTime = clock.elapsedTime;
 
-          mixer.update(delta);
+          // Update ALL mixers retrieved from Inline loading / humanoid parsing
+          mixers.forEach(mixer => mixer.update(delta));
 
           timeSensors.forEach(sensor => {
             if (sensor.enabled && sensor.loop) {
@@ -547,11 +538,6 @@ export default function App() {
 
     // ── Parser ──────────────────────────────────────────────────────────────
 
-    /**
-     * Walk a node's MFNode "-children" array and attach objects to parent.
-     * In X3D JSON, MFNode / SFNode fields carry a "-" prefix; simple fields "@".
-     */
-    // Split a flat array into consecutive tuples of size n
     const chunk = (arr, n) => {
       const out = [];
       for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
@@ -568,7 +554,6 @@ export default function App() {
     };
 
     const parseChild = async (child, parent) => {
-      // DEF lives inside the node object, e.g. child.Transform["@DEF"]
       const defName = Object.values(child)[0]?.['@DEF'];
       let object = null;
 
@@ -584,6 +569,52 @@ export default function App() {
         object = new THREE.Group();
         billboards.push(object);
         await parseNode(child.Billboard, object);
+
+      } else if (child.Inline) {
+        // Handle external scene fetching (Including Humanoids)
+        const urlArray = child.Inline['@url'];
+        if (urlArray && urlArray.length > 0) {
+          const url = urlArray[0];
+          object = new THREE.Group();
+
+          try {
+            let inlineJson;
+            try {
+              // 1. Standard web loading (Expects url available from server, e.g. /public)
+              const response = await fetch(url);
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              inlineJson = await response.json();
+            } catch (fetchErr) {
+              // 2. Fallback to Dynamic Import (Useful if running in strict Vite local '/src' folders)
+              console.warn(`Fetch failed for Inline ${url}, attempting dynamic import...`, fetchErr.message);
+              const cleanUrl = url.startsWith('src/') ? url.substring(4) : url;
+              const module = await import(/* @vite-ignore */ `./${cleanUrl}`);
+              inlineJson = module.default || module;
+            }
+
+            // A) Parse standard X3D recursive nodes inside the dynamically loaded file.
+            // This injects any local TimeSensors & Routes directly into the global pool so they animate.
+            if (inlineJson.X3D?.Scene) {
+              await parseNode(inlineJson.X3D.Scene, object);
+            }
+
+            // B) Invoke specialized loader to resolve specific HAnim nodes
+            const humanoidResult = await loadX3DHumanoid(inlineJson, scene);
+            if (humanoidResult) {
+              const { mesh, mixer } = humanoidResult;
+              if (mesh) {
+                mesh.frustumCulled = false;
+                object.add(mesh);
+              }
+              if (mixer) {
+                mixers.push(mixer);
+              }
+            }
+
+          } catch (err) {
+            console.error(`Failed to load Inline scene from ${url}:`, err);
+          }
+        }
 
       } else if (child.Shape) {
         object = await createShape(child.Shape);
@@ -682,7 +713,6 @@ export default function App() {
     };
 
     const createShape = async (data) => {
-      // Shape fields: "-geometry" (SFNode), "-appearance" (SFNode)
       const geo = await createGeometry(data['-geometry']);
       const mat = createMaterial(data['-appearance']);
 
@@ -699,25 +729,23 @@ export default function App() {
       }
 
       if (geo && mat) {
-        // Check if this specific geometry generated vertex colors
         const hasVertexColors = geo.hasAttribute('color');
 
         if (geo.isLineGeometry) {
-          return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ 
+          return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
             color: hasVertexColors ? 0xffffff : mat.color,
             vertexColors: hasVertexColors
           }));
         }
-        
+
         if (geo.isPointGeometry) {
-          return new THREE.Points(geo, new THREE.PointsMaterial({ 
+          return new THREE.Points(geo, new THREE.PointsMaterial({
             color: hasVertexColors ? 0xffffff : mat.color,
             vertexColors: hasVertexColors,
             size: 0.1
           }));
         }
 
-        // For standard meshes, apply vertexColors flag if needed
         mat.vertexColors = hasVertexColors;
         return new THREE.Mesh(geo, mat);
       }
@@ -766,7 +794,6 @@ export default function App() {
     };
 
     const createMaterial = (appearance) => {
-      // "-appearance" → Appearance → "-material" → Material
       const m = appearance?.Appearance?.['-material']?.Material;
       if (!m) return new THREE.MeshStandardMaterial({ color: 0x888888 });
 
@@ -876,7 +903,6 @@ export default function App() {
         );
       });
 
-      // "@string" is the MFString field; "-fontStyle" is SFNode
       const strings = textData['@string'] || ['Text'];
       const size    = textData['-fontStyle']?.FontStyle?.['@size'] ?? 1;
 
@@ -972,8 +998,6 @@ export default function App() {
     });
 
     // ── Routes ────────────────────────────────────────────────────────────────
-    // ROUTE fields: "@fromNode", "@fromField", "@toNode", "@toField"
-
     const processRoutes = () => {
       routes.forEach(r => {
         const from = defRegistry.get(r['@fromNode']);
