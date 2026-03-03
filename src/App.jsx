@@ -7,7 +7,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
-import { createHumanoid } from './HumanoidComplete.js';
+import gramps from './HumanoidComplete.json';
+
+import { loadX3DHumanoid } from './X3DHumanoidLoader.js';
 
 // Hyperjump JSON Schema validation (install: npm i @hyperjump/json-schema)
 import { registerSchema, validate } from "@hyperjump/json-schema/draft-2020-12";
@@ -443,7 +445,8 @@ export default function App() {
     const routeUpdates = [];
     const billboards = [];
 
-    const init = async () => {
+    const init = () => {
+      async function fetchData() {
       try {
         setLoading(true);
         const container = containerRef.current;
@@ -484,19 +487,9 @@ export default function App() {
         if (x3dData.X3D?.Scene) {
           await parseNode(x3dData.X3D.Scene, scene);
         }
-	const { mesh, animations } = createHumanoid();
+	const { mesh, mixer } = await loadX3DHumanoid(gramps, scene)
         mesh.frustumCulled = false;
 	scene.add(mesh);
-
-	const mixer = new THREE.AnimationMixer(mesh);
-	if (animations && animations.length > 0) {
-		// Just play the first animation exported, whatever it happens to be named
-		const walkAction = mixer.clipAction(animations[0]);
-		console.warn("Playing...");
-		walkAction.play();
-	} else {
-		console.warn("No animations were found for the humanoid.");
-	}
 
         // 5. Process Routes
         processRoutes();
@@ -548,6 +541,8 @@ export default function App() {
         setError(err.message);
         setLoading(false);
       }
+      };
+      fetchData();
     };
 
     // ── Parser ──────────────────────────────────────────────────────────────
