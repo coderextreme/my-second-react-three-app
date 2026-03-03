@@ -469,6 +469,7 @@ export default function App() {
         await renderer.init();
         renderer.setSize(width, height);
         renderer.setPixelRatio(window.devicePixelRatio);
+ 	renderer.outputColorSpace = THREE.SRGBColorSpace;
 
         container.innerHTML = '';
         container.appendChild(renderer.domElement);
@@ -484,12 +485,14 @@ export default function App() {
           await parseNode(x3dData.X3D.Scene, scene);
         }
 	const { mesh, animations } = createHumanoid();
+        mesh.frustumCulled = false;
 	scene.add(mesh);
 
 	const mixer = new THREE.AnimationMixer(mesh);
 	if (animations && animations.length > 0) {
 		// Just play the first animation exported, whatever it happens to be named
 		const walkAction = mixer.clipAction(animations[0]);
+		console.warn("Playing...");
 		walkAction.play();
 	} else {
 		console.warn("No animations were found for the humanoid.");
@@ -499,9 +502,14 @@ export default function App() {
         processRoutes();
 
         // 6. Animation Loop
+	      // // 6. Animation Loop
         const animate = () => {
-          const elapsedTime = clock.getElapsedTime();
-	  mixer.update(clock.getDelta());
+          // getDelta() must be called ONLY ONCE per frame!
+          const delta = clock.getDelta();
+          // getDelta() automatically updates clock.elapsedTime, so we can just read the property
+          const elapsedTime = clock.elapsedTime;
+
+          mixer.update(delta);
 
           timeSensors.forEach(sensor => {
             if (sensor.enabled && sensor.loop) {
@@ -696,8 +704,26 @@ export default function App() {
       }
 
       if (geo && mat) {
-        if (geo.isLineGeometry) return new THREE.LineSegments(geo, mat);
-        if (geo.isPointGeometry) return new THREE.Points(geo, mat);
+        // Check if this specific geometry generated vertex colors
+        const hasVertexColors = geo.hasAttribute('color');
+
+        if (geo.isLineGeometry) {
+          return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ 
+            color: hasVertexColors ? 0xffffff : mat.color,
+            vertexColors: hasVertexColors
+          }));
+        }
+        
+        if (geo.isPointGeometry) {
+          return new THREE.Points(geo, new THREE.PointsMaterial({ 
+            color: hasVertexColors ? 0xffffff : mat.color,
+            vertexColors: hasVertexColors,
+            size: 0.1
+          }));
+        }
+
+        // For standard meshes, apply vertexColors flag if needed
+        mat.vertexColors = hasVertexColors;
         return new THREE.Mesh(geo, mat);
       }
       return null;
