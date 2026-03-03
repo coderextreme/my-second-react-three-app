@@ -352,7 +352,7 @@ export default function App() {
               ]
             }
           },
-
+	  { "Inline": { "@url" : [ "src/HumanoidComplete.json" ] } },
           // ── Routes ────────────────────────────────────────────────────────
           { "ROUTE": { "@fromNode": "Clock",       "@fromField": "fraction_changed", "@toNode": "BoxMover",    "@toField": "set_fraction"   } },
           { "ROUTE": { "@fromNode": "BoxMover",    "@fromField": "value_changed",    "@toNode": "BoxTransform","@toField": "set_translation" } },
