@@ -32,7 +32,6 @@ export async function loadX3DHumanoid(json, scene) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     if (uvs) geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    if (colors) geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     
     geometry.computeVertexNormals();
 
@@ -50,6 +49,7 @@ export async function loadX3DHumanoid(json, scene) {
         
         material = new THREE.MeshStandardMaterial({ map: diffuseMap, vertexColors: !!colors });
     } else {
+    	if (colors) geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         material = new THREE.MeshStandardMaterial({ vertexColors: !!colors });
     }
 
