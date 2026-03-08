@@ -1,0 +1,239 @@
+{
+  "X3D": {
+    "encoding": "UTF-8",
+    "@profile": "Immersive",
+    "@version": "3.3",
+    "head": {
+        "component": [
+          {
+            "@name":"RigidBodyPhysics",
+            "@level":2
+          }
+        ],
+        "meta": [
+          {
+            "@name":"title",
+            "@content":"scene.json"
+          },
+          {
+            "@name":"description",
+            "@content":"A Rigid Body Physics simuation from ammo.js"
+          },
+          {
+            "@name":"generator",
+            "@content":"Gemini 3.1"
+          },
+          {
+            "@name":"creator",
+            "@content":"John Carlson"
+          },
+          {
+            "@name":"created",
+            "@content":"8 March 2026"
+          },
+          {
+            "@name":"license",
+            "@content":"../license.html"
+          },
+          {
+            "@name":"reference",
+            "@content":"X3D JSON encoding: https://www.web3d.org/wiki/index.php/X3D_JSON_Encoding"
+          }
+        ]
+    },
+    "Scene": {
+      "-children": [
+        { "NavigationInfo": { "@type": ["EXAMINE", "ANY"] } },
+        { "Background": { "@skyColor": [0.75, 0.82, 0.9] } },
+        { "Viewpoint": { "@position": [-12, 7, 10], "@orientation": [0, 1, 0, -0.8], "@description": "Main View" } },
+        { "DirectionalLight": { "@direction": [7, -10, -15], "@intensity": 1.0, "@shadows": true } },
+        { "KeySensor": { "@DEF": "Keys" } },
+        
+        {
+          "RigidBodyCollection": {
+            "-bodies": [
+              {
+                "RigidBody": {
+                  "@DEF": "GroundBody",
+                  "@mass": 0,
+                  "@position": [0, -0.5, 0],
+                  "-geometry": [
+                    {
+                      "CollidableShape": {
+                        "-shape": {
+                          "Shape": {
+                            "-geometry": { "Box": { "@size": [40, 1, 40] } },
+                            "-appearance": { "Appearance": { "-material": { "Material": { "@diffuseColor": [0.8, 0.8, 0.8] } } } }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "RigidBody": {
+                  "@DEF": "BaseBody",
+                  "@mass": 0,
+                  "@position": [-3, 0.1, -5],
+                  "-geometry": [
+                    {
+                      "CollidableShape": {
+                        "-shape": {
+                          "Shape": {
+                            "-geometry": { "Box": { "@size": [1, 0.2, 1] } },
+                            "-appearance": { "Appearance": { "-material": { "Material": { "@diffuseColor": [0.37, 0.37, 0.37] } } } }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "RigidBody": {
+                  "@DEF": "PylonBody",
+                  "@mass": 0,
+                  "@position": [-3, 3, -5],
+                  "-geometry": [
+                    {
+                      "CollidableShape": {
+                        "-shape": {
+                          "Shape": {
+                            "-geometry": { "Box": { "@size": [0.4, 6, 0.4] } },
+                            "-appearance": { "Appearance": { "-material": { "Material": { "@diffuseColor": [0.37, 0.37, 0.37] } } } }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "RigidBody": {
+                  "@DEF": "ArmBody",
+                  "@mass": 2,
+                  "@position": [-3, 6.2, -1.5],
+                  "-geometry": [
+                    {
+                      "CollidableShape": {
+                        "-shape": {
+                          "Shape": {
+                            "-geometry": { "Box": { "@size": [0.4, 0.4, 7.4] } },
+                            "-appearance": { "Appearance": { "-material": { "Material": { "@diffuseColor": [0.37, 0.37, 0.37] } } } }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "RigidBody": {
+                  "@DEF": "ClothProxyBody",
+                  "@mass": 0.9,
+                  "@position": [-3, 4.5, -0.5],
+                  "-geometry": [
+                    {
+                      "CollidableShape": {
+                        "-shape": {
+                          "Shape": {
+                            "-geometry": { "Box": { "@size": [0.1, 3, 4] } },
+                            "-appearance": { "Appearance": { "-material": { "Material": { "@diffuseColor": [1, 1, 1] } } } }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "RigidBody": {
+                  "@DEF": "Brick_0_0",
+                  "@mass": 0.5,
+                  "@position": [0, 0.3, -2.4],
+                  "-geometry": [
+                    {
+                      "CollidableShape": {
+                        "-shape": {
+                          "Shape": {
+                            "@DEF": "BrickShape",
+                            "-geometry": { "Box": { "@size": [0.6, 0.6, 1.2] } },
+                            "-appearance": { "Appearance": { "-material": { "Material": { "@diffuseColor": [0.8, 0.3, 0.2] } } } }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.3, -1.2], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.3, 0], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.3, 1.2], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.3, 2.4], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.9, -1.8], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.9, -0.6], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.9, 0.6], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 0.9, 1.8], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 1.5, -2.4], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 1.5, -1.2], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 1.5, 0], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 1.5, 1.2], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 1.5, 2.4], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 2.1, -1.8], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 2.1, -0.6], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 2.1, 0.6], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } },
+              { "RigidBody": { "@mass": 0.5, "@position": [0, 2.1, 1.8], "-geometry": [ { "CollidableShape": { "-shape": { "Shape": { "@USE": "BrickShape" } } } } ] } }
+            ],
+            "-joints": [
+              {
+                "SingleAxisHingeJoint": {
+                  "@body1": "PylonBody",
+                  "@body2": "ArmBody",
+                  "@anchorPoint": [-3, 6, -5],
+                  "@axis": [0, 1, 0]
+                }
+              },
+              {
+                "SingleAxisHingeJoint": {
+                  "@body1": "ArmBody",
+                  "@body2": "ClothProxyBody",
+                  "@anchorPoint": [-3, 6, -0.5],
+                  "@axis": [1, 0, 0]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "Script": {
+            "@DEF": "ArmMotorScript",
+            "field": [
+              { "@name": "keyPress", "@type": "SFString", "@accessType": "inputOnly" },
+              { "@name": "keyRelease", "@type": "SFString", "@accessType": "inputOnly" },
+              { "@name": "torqueOut", "@type": "MFVec3f", "@accessType": "outputOnly" }
+            ],
+            "#sourceCode": [
+              "ecmascript:",
+              "function keyPress(val) {",
+              "    if (val === 'q' || val === 'Q') torqueOut = new MFVec3f(new SFVec3f(0, 150, 0));",
+              "    else if (val === 'a' || val === 'A') torqueOut = new MFVec3f(new SFVec3f(0, -150, 0));",
+              "}",
+              "function keyRelease(val) {",
+              "    if (val === 'q' || val === 'Q' || val === 'a' || val === 'A') {",
+              "        torqueOut = new MFVec3f(new SFVec3f(0, 0, 0));",
+              "    }",
+              "}"
+            ]
+          }
+        },
+        { "ROUTE": { "@fromNode": "Keys", "@fromField": "keyPress", "@toNode": "ArmMotorScript", "@toField": "keyPress" } },
+        { "ROUTE": { "@fromNode": "Keys", "@fromField": "keyRelease", "@toNode": "ArmMotorScript", "@toField": "keyRelease" } },
+        { "ROUTE": { "@fromNode": "ArmMotorScript", "@fromField": "torqueOut", "@toNode": "ArmBody", "@toField": "set_torques" } }
+      ]
+    }
+  }
+}
