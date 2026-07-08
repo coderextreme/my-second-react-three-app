@@ -278,8 +278,6 @@ export default function App() {
               ]
             }
           },
-
-          // ── Billboard Text ────────────────────────────────────────────────
           {
             "Billboard": {
               "@DEF": "TextBillboard",
